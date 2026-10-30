@@ -1,37 +1,127 @@
 #include "mainwindow.h"
-#include <QPushButton>
-#include <QLabel>
 #include <QVBoxLayout>
-#include <QWidget>
+#include <QGridLayout>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    // 設定視窗標題與大小
-    setWindowTitle("我的第一個 Qt 程式");
-    resize(400, 300);
-
-    // 建立一個中央 Widget 與垂直排版管理器
     QWidget *centralWidget = new QWidget(this);
-    QVBoxLayout *layout = new QVBoxLayout(centralWidget);
+    QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
 
-    // 建立文字標籤
-    QLabel *label = new QLabel("歡迎使用 Qt C++！", this);
-    label->setAlignment(Qt::AlignCenter); // 文字置中
+    // 建立顯示螢幕
+    display = new QLineEdit("0", this);
+    display->setReadOnly(true);
+    display->setAlignment(Qt::AlignRight);
+    display->setStyleSheet("font-size: 28px; padding: 10px;");
+    mainLayout->addWidget(display);
 
-    // 建立按鈕
-    QPushButton *button = new QPushButton("點擊我", this);
+    // 建立按鈕網格
+    QGridLayout *gridLayout = new QGridLayout();
+    QString buttonLabels[4][4] = {
+        {"7", "8", "9", "/"},
+        {"4", "5", "6", "*"},
+        {"1", "2", "3", "-"},
+        {"0", "C", "=", "+"}
+    };
 
-    // 將元件加入排版中
-    layout->addWidget(label);
-    layout->addWidget(button);
+    for (int row = 0; row < 4; ++row) {
+        for (int col = 0; col < 4; ++col) {
+            QString text = buttonLabels[row][col];
+            QPushButton *btn = new QPushButton(text, this);
+            btn->setStyleSheet("font-size: 20px; min-height: 50px;");
 
+            if (text == "C") {
+                connect(btn, &QPushButton::clicked, this, &MainWindow::onClearClicked);
+            } else if (text == "=") {
+                connect(btn, &QPushButton::clicked, this, &MainWindow::onEqualClicked);
+            } else if (text == "+" || text == "-" || text == "*" || text == "/") {
+                connect(btn, &QPushButton::clicked, this, &MainWindow::onOperatorClicked);
+            } else {
+                connect(btn, &QPushButton::clicked, this, &MainWindow::onNumberClicked);
+            }
+
+            gridLayout->addWidget(btn, row, col);
+        }
+    }
+
+    mainLayout->addLayout(gridLayout);
     setCentralWidget(centralWidget);
-
-    // 連結按鈕點擊事件：當按鈕被按下時，改變文字標籤的內容
-    connect(button, &QPushButton::clicked, [label]() {
-        label->setText("按鈕被點擊了！");
-    });
+    setWindowTitle("Qt 計算機 (純程式碼版)");
+    resize(320, 420);
 }
 
 MainWindow::~MainWindow() {}
+
+void MainWindow::onNumberClicked()
+{
+    QPushButton *btn = qobject_cast<QPushButton *>(sender());
+    if (!btn) return;
+
+    if (display->text() == "0" || waitingForOperand) {
+        display->setText(btn->text());
+        waitingForOperand = false;
+    } else {
+        display->setText(display->text() + btn->text());
+    }
+}
+
+void MainWindow::onOperatorClicked()
+{
+    QPushButton *btn = qobject_cast<QPushButton *>(sender());
+    if (!btn) return;
+
+    QString clickedOperator = btn->text();
+    double operand = display->text().toDouble();
+
+    if (!pendingOperator.isEmpty()) {
+        if (!calculate(operand, pendingOperator)) {
+            display->setText("Error");
+            return;
+        }
+        display->setText(QString::number(pendingOperand));
+    } else {
+        pendingOperand = operand;
+    }
+
+    pendingOperator = clickedOperator;
+    waitingForOperand = true;
+}
+
+void MainWindow::onEqualClicked()
+{
+    double operand = display->text().toDouble();
+
+    if (!pendingOperator.isEmpty()) {
+        if (!calculate(operand, pendingOperator)) {
+            display->setText("Error");
+            return;
+        }
+        display->setText(QString::number(pendingOperand));
+        pendingOperator.clear();
+    }
+
+    waitingForOperand = true;
+}
+
+void MainWindow::onClearClicked()
+{
+    pendingOperand = 0.0;
+    pendingOperator.clear();
+    display->setText("0");
+    waitingForOperand = true;
+}
+
+bool MainWindow::calculate(double rightOperand, const QString &op)
+{
+    if (op == "+") {
+        pendingOperand += rightOperand;
+    } else if (op == "-") {
+        pendingOperand -= rightOperand;
+    } else if (op == "*") {
+        pendingOperand *= rightOperand;
+    } else if (op == "/") {
+        if (rightOperand == 0.0) return false;
+        pendingOperand /= rightOperand;
+    }
+    return true;
+}
